@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Render</title>
+</head>
+<body style="display:contents;">
+
+	<canvas style="
+	width: 100vw; height: 100vh;
+	object-fit: fill; object-position: center;
+	background-color: #111;" ><script type="module">
+		
+		import Async from "./async.mjs"
+
+		let canvas = document.querySelector("canvas")
+		let context = canvas.getContext("2d")
+
+		let resize_emitter = new Async( _ => {
+
+			let resize_observer = new ResizeObserver( ([{ target, contentBoxSize: [{ inlineSize, blockSize }] }]) => {
+
+				let size = {
+					width: inlineSize,
+					height: blockSize,
+					}
+
+				Object.assign( target, size )
+				_.resolve( size )
+
+				} )
+
+			resize_observer.observe( canvas )
+			
+			} )
+
+		let redraw_emitter = new Async( _ => {
+				
+			let _id
+			
+			function request () { _id = requestAnimationFrame( time => {
+
+				_.resolve( time )
+
+				request()
+				} ) }
+
+			request()
+
+			}	) 
+
+		let mouse_move_emitter = new Async( _ => {
+
+			addEventListener( 'mousemove', e => _.resolve(e) )
+
+			} )
+
+		let particles = Array.from({ length: 100 }, _ => ({
+			x: Math.random(),
+			y: Math.random(),
+			vx: Math.random() * ( Math.round(Math.random()) == 0 ? -1 : 1 ),
+			vy: Math.random() * ( Math.round(Math.random()) == 0 ? -1 : 1 ),
+			}) )
+
+		let forces = [
+			// gravity: 
+			// ({ x, y }) => ({
+			// 	ax: 0,
+			// 	ay: 1 * y,
+			// 	}),
+			// center: (distance) * negative(amplitude) clamped(0) signed(distance)
+			({ x, y }) => ( ( distance, teta ) => ({
+				ax: 16 * Math.min( distance -1, 0 ), // * Math.sign(x -.5). // * Math.cos( teta ),
+				ay: 16 * Math.min( distance -1, 0 ), // * Math.sign(y -.5), // * Math.sin( teta ),
+				}) )( 
+				Math.sqrt( ( mouse.x -x)^2 + (mouse.y -y)^2 ),
+				Math.atan( mouse.y -y / mouse.x -x ),
+				),
+			]
+
+		let mouse
+		let size
+
+
+
+		;( async () => { await resize_emitter; for await( let { x, y } of mouse_move_emitter ) {
+			// console.log( "mousemove", x, y )
+
+			let min = size.width > size.height ? size.height : size.width
+
+			mouse = { 
+				x: (x - ( size.width  /2 )), 
+				y: (y - ( size.height /2 )), 
+				}
+
+			console.log( mouse )
+
+			} } )()
+
+		;( async () => { for await( let { width, height } of resize_emitter ) {
+			// console.log("resize")
+
+			size = { width, height }
+
+			let min = width > height ? height : width
+
+			let transform = new DOMMatrix()
+				transform.translateSelf(
+					width > height ? (width - height) /2 : 0,
+					height > width ? (height - width) /2: 0, )
+				transform.scaleSelf( min, min )
+				context.setTransform( transform )
+
+			} } )()
+
+		;( async () => { await Promise.all([ resize_emitter, mouse_move_emitter ]) 
+			for await( let time of redraw_emitter ) {
+				// console.log("redraw")
+
+				draw( size.width, size.height )
+
+				setTimeout( update( time ) )
+
+				} 
+			} ) ()
+
+
+
+		function draw ( width, height ) {
+
+			context.clearRect( -width, -height, 2*width, 2*height )
+
+			context.lineWidth = .004
+			context.strokeStyle = "#eee"
+
+			context.beginPath()
+
+			for( let { x, y } of particles ) {
+
+				context.moveTo( x, y )
+				context.arc( x, y, .004, 0, Math.PI * 2 )
+
+				}
+
+			context.stroke()
+
+			}
+
+		function update ( millis ) {
+
+			let secs = millis /1000
+			let k_secs = secs /1000
+
+			for( let p of particles ) {
+
+				p.x += p.vx * k_secs
+				p.y += p.vy * k_secs
+
+				// damping
+				p.vx *= .99 		
+				p.vy *= .99 
+
+				// force
+				for( let force of forces ) {
+					let { ax, ay } = force( p )
+					p.vx += ax * k_secs
+					p.vy += ay * k_secs
+					}
+
+				// collision
+				if( p.x <= 0 || p.x >= 1 ) p.vx = 0
+				if( p.y <= 0 || p.y >= 1 ) p.vy = 0
+				p.x = Math.min( Math.max( p.x, 0 ), 1 )
+				p.y = Math.min( Math.max( p.y, 0 ), 1 )
+
+				}
+
+			}
+
+
+	</script></canvas>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
