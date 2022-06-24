@@ -1,0 +1,11 @@
+
+
+*:not( head, style, script, template ) {
+
+	all: unset;
+	display: inline-block;
+	box-sizing: border-box;
+	width: min-content;
+	height: min-content;
+
+	}	 
